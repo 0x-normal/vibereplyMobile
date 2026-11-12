@@ -1,0 +1,353 @@
+/* vibeReply - Content styles */
+
+/* Trigger button on each tweet */
+.vibe-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #71767b;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  font-family: inherit;
+}
+.vibe-trigger-btn > svg {
+  display: block;
+  width: 18.75px;
+  height: 18.75px;
+}
+.vibe-trigger-btn:hover,
+.vibe-trigger-btn:focus-visible {
+  color: #1d9bf0;
+  background-color: rgba(29, 155, 240, 0.1);
+}
+.vibe-trigger-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.vibe-trigger-btn.vibe-loading {
+  cursor: wait;
+}
+.vibe-spinner {
+  box-sizing: border-box;
+  width: 18.75px;
+  height: 18.75px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: vibe-spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes vibe-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Floating side panel */
+.vibe-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 360px;
+  max-height: calc(100vh - 120px);
+  background: #0f172a;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateX(20px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.vibe-panel.vibe-panel-visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.vibe-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(139, 92, 246, 0.12));
+  border-radius: 14px 14px 0 0;
+  /* Drag handle for moving the panel */
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.vibe-panel.vibe-dragging {
+  transition: none;
+  user-select: none;
+}
+.vibe-panel.vibe-dragging .vibe-header {
+  cursor: grabbing;
+}
+.vibe-header .vibe-icon-btn {
+  cursor: pointer;
+}
+.vibe-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: linear-gradient(135deg, #67e8f9, #c4b5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.vibe-header-actions {
+  display: flex;
+  gap: 6px;
+}
+.vibe-icon-btn {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.vibe-icon-btn:hover {
+  background: rgba(139, 92, 246, 0.15);
+  color: #fff;
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.vibe-body {
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+}
+
+.vibe-original {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.vibe-original-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+.vibe-original-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  max-height: 80px;
+  overflow-y: auto;
+}
+.vibe-media-info {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #67e8f9;
+}
+
+.vibe-meta {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: #64748b;
+  text-align: right;
+}
+.vibe-meta:empty {
+  display: none;
+}
+
+.vibe-read {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+  font-size: 12px;
+  line-height: 1.45;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+.vibe-status {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.vibe-status-info {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #67e8f9;
+}
+.vibe-status-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.vibe-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vibe-reply-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.vibe-reply-card:hover {
+  border-color: rgba(139, 92, 246, 0.45);
+  background: rgba(30, 41, 59, 0.85);
+}
+.vibe-reply-num {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.vibe-reply-text {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #f1f5f9;
+  word-break: break-word;
+}
+.vibe-copy-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.vibe-copy-btn:hover {
+  background: rgba(139, 92, 246, 0.18);
+  color: #fff;
+  border-color: rgba(139, 92, 246, 0.5);
+}
+.vibe-copy-btn.vibe-copied {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* "Your reply" fix & improve section */
+.vibe-improve {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+}
+.vibe-improve > .vibe-original-label {
+  display: block;
+  margin-bottom: 6px;
+}
+.vibe-my-reply {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: 9px 11px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  color: #f1f5f9;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.vibe-my-reply::placeholder {
+  color: #64748b;
+}
+.vibe-my-reply:focus {
+  border-color: rgba(139, 92, 246, 0.6);
+}
+.vibe-improve-btn {
+  width: 100%;
+  margin: 8px 0 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.vibe-improve-btn:hover {
+  opacity: 0.9;
+}
+.vibe-improve-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.vibe-improve-feedback {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  color: #fde68a;
+}
+.vibe-improve-label {
+  margin: 4px 0 -2px;
+}
+.vibe-reply-fixed {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.vibe-reply-fixed .vibe-reply-num {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+}
+
+/* Scrollbar */
+.vibe-body::-webkit-scrollbar,
+.vibe-original-text::-webkit-scrollbar {
+  width: 6px;
+}
+.vibe-body::-webkit-scrollbar-thumb,
+.vibe-original-text::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.4);
+  border-radius: 3px;
+}

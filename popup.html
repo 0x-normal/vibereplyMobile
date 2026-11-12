@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>vibeReply Settings</title>
+  <link rel="stylesheet" href="popup-styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">vR</div>
+    <h1>vibeReply</h1>
+    <p class="subtitle">Chill replies for X, powered by Gemini</p>
+  </div>
+
+  <div class="section">
+    <h2>Gemini API Keys</h2>
+    <div class="form-group">
+      <label for="apiKeys">Paste new keys, one per line. They are added to your saved keys.</label>
+      <textarea id="apiKeys" rows="6" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..." autocomplete="off" spellcheck="false"></textarea>
+      <p class="help-text">
+        Get free keys at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>.
+        Free tier = 20 requests/day per key. The extension auto-rotates.
+      </p>
+      <span id="apiStatus" class="api-status disconnected">No keys configured</span>
+    </div>
+    <button id="saveBtn" class="btn">Add Keys</button>
+  </div>
+
+  <div class="section" id="keyStatusSection" style="display:none;">
+    <h2>Gemini Key Status</h2>
+    <div id="keyStatusList" class="key-status-list"></div>
+    <button id="resetBtn" class="btn btn-secondary">Reset rotation state</button>
+  </div>
+
+  <div class="section">
+    <h2>Reply Speed</h2>
+    <div class="form-group speed-options">
+      <label class="speed-option">
+        <input type="radio" name="replySpeed" value="fast">
+        <span><strong>Fast</strong> (recommended): Gemini 3.5 Flash-Lite, replies in a second or two</span>
+      </label>
+      <label class="speed-option">
+        <input type="radio" name="replySpeed" value="smart">
+        <span><strong>Smarter</strong>: Gemini 3.8 Flash, a bit better but takes several seconds because it always thinks first</span>
+      </label>
+      <p class="help-text">If the first model fails or is out of quota, the other one is used automatically.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>My Reply Style (optional)</h2>
+    <div class="form-group">
+      <label for="styleExamples">Paste 5 to 15 replies you wrote yourself, one per line</label>
+      <textarea id="styleExamples" rows="6" placeholder="what's the plan if it gaps down&#10;nah the chart says otherwise&#10;how long did that take you" autocomplete="off" spellcheck="false"></textarea>
+      <p class="help-text">
+        The AI copies your voice from these (length, casing, slang, how direct you are), not their content.
+        This is the biggest thing you can do to make suggestions sound like you.
+      </p>
+      <span id="styleStatus" class="api-status disconnected">No examples</span>
+    </div>
+    <button id="saveStyleBtn" class="btn">Save Style</button>
+  </div>
+
+  <div class="section">
+    <h2>Reply Suffixes (optional)</h2>
+    <div class="form-group">
+      <label for="replySuffix">One suffix per line — rotated round-robin on each copy</label>
+      <textarea id="replySuffix" rows="5" placeholder="thank you&#10;much appreciated&#10;cheers" autocomplete="off" spellcheck="false"></textarea>
+      <p class="help-text">
+        Each line is a separate suffix. Every time you copy a reply, the next suffix in the list is appended,
+        then it cycles back to the first. A space is added automatically (unless your line starts with whitespace).
+        Stays active until you clear it.
+      </p>
+      <span id="suffixStatus" class="api-status disconnected">No suffix set</span>
+    </div>
+    <button id="saveSuffixBtn" class="btn">Save Suffixes</button>
+    <button id="resetSuffixBtn" class="btn btn-secondary">Reset rotation</button>
+    <button id="clearSuffixBtn" class="btn btn-secondary">Clear</button>
+  </div>
+
+  <div class="section">
+    <h2>Groq API Keys (optional fallback)</h2>
+    <div class="form-group">
+      <label for="groqKeys">Paste new keys, one per line. They are added to your saved keys.</label>
+      <textarea id="groqKeys" rows="4" placeholder="gsk_...&#10;gsk_..." autocomplete="off" spellcheck="false"></textarea>
+      <p class="help-text">
+        Used when all Gemini keys fail or are out of quota, before OpenRouter. Fast, with a free tier.
+        Uses <code>qwen/qwen3.8-27b</code> (reads images), then <code>openai/gpt-oss-120b</code> (text only).
+        Get keys at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>.
+        The extension auto-rotates.
+      </p>
+      <span id="groqStatus" class="api-status disconnected">No keys configured</span>
+    </div>
+    <button id="saveGroqBtn" class="btn">Add Keys</button>
+  </div>
+
+  <div class="section" id="groqStatusSection" style="display:none;">
+    <h2>Groq Key Status</h2>
+    <div id="groqStatusList" class="key-status-list"></div>
+    <button id="resetGroqBtn" class="btn btn-secondary">Reset rotation state</button>
+  </div>
+
+  <div class="section">
+    <h2>OpenRouter Fallback (optional)</h2>
+    <div class="form-group">
+      <label for="openrouterKey">OpenRouter API key</label>
+      <input type="password" id="openrouterKey" placeholder="sk-or-..." autocomplete="off" spellcheck="false">
+      <p class="help-text">
+        Last resort: used only when Gemini and Groq both fail. Routes to <code>google/gemini-3.8-flash</code>.
+        Get one at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>.
+      </p>
+      <span id="orStatus" class="api-status disconnected">Not configured</span>
+    </div>
+    <button id="saveOrBtn" class="btn">Save OpenRouter Key</button>
+  </div>
+
+  <div class="section info">
+    <h2>How it works</h2>
+    <ul>
+      <li>Open <strong>x.com</strong></li>
+      <li>Click <strong>Vibe Reply</strong> on any post</li>
+      <li>Get 6 short replies: 2 questions and 4 reactions or takes</li>
+      <li>Click the copy icon next to any reply</li>
+    </ul>
+  </div>
+
+  <!-- Lets this page also work as the phone app's settings screen; does nothing in the extension -->
+  <script src="mobile/chrome-shim.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
