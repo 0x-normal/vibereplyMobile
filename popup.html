@@ -33,6 +33,31 @@
   </div>
 
   <div class="section">
+    <h2>DeepSeek API Keys (optional, paid)</h2>
+    <div class="form-group">
+      <label for="deepseekKeys">Paste new keys, one per line. They are added to your saved keys.</label>
+      <textarea id="deepseekKeys" rows="3" placeholder="sk-..." autocomplete="off" spellcheck="false"></textarea>
+      <p class="help-text">
+        Uses <code>deepseek-flash</code> (reads images, thinks briefly before replying). Very cheap, but paid:
+        add balance at <a href="https://platform.deepseek.com/top_up" target="_blank">platform.deepseek.com</a>.
+        Get keys at <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com/api_keys</a>.
+      </p>
+      <span id="deepseekStatus" class="api-status disconnected">No keys configured</span>
+    </div>
+    <label class="speed-option">
+      <input type="checkbox" id="deepseekFirst" checked>
+      <span><strong>Use DeepSeek first</strong>, before Gemini. Turn off to use DeepSeek only when Gemini fails or is out of quota.</span>
+    </label>
+    <button id="saveDeepseekBtn" class="btn">Add Keys</button>
+  </div>
+
+  <div class="section" id="deepseekStatusSection" style="display:none;">
+    <h2>DeepSeek Key Status</h2>
+    <div id="deepseekStatusList" class="key-status-list"></div>
+    <button id="resetDeepseekBtn" class="btn btn-secondary">Reset rotation state</button>
+  </div>
+
+  <div class="section">
     <h2>Reply Speed</h2>
     <div class="form-group speed-options">
       <label class="speed-option">

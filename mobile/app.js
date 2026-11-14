@@ -40,8 +40,9 @@
   }
 
   async function hasAnyKey() {
-    const r = await chrome.storage.local.get(['geminiApiKeys', 'geminiApiKey', 'groqApiKeys', 'groqApiKey', 'openrouterApiKey']);
+    const r = await chrome.storage.local.get(['geminiApiKeys', 'geminiApiKey', 'groqApiKeys', 'groqApiKey', 'openrouterApiKey', 'deepseekApiKeys']);
     return (Array.isArray(r.geminiApiKeys) && r.geminiApiKeys.length > 0) ||
+      (Array.isArray(r.deepseekApiKeys) && r.deepseekApiKeys.length > 0) ||
       (Array.isArray(r.groqApiKeys) && r.groqApiKeys.length > 0) ||
       !!r.geminiApiKey || !!r.groqApiKey || !!r.openrouterApiKey;
   }
@@ -149,7 +150,7 @@
   async function loadPost(id) {
     if (!(await hasAnyKey())) {
       openSettings();
-      toast('Add a Gemini key first, then tap Done');
+      toast('Add an API key first, then tap Done');
       $('linkInput').value = `https://x.com/i/status/${id}`;
       return;
     }
@@ -380,7 +381,7 @@
     installEvent = null;
   });
   chrome.storage.onChanged.addListener(changes => {
-    if (['geminiApiKeys', 'groqApiKeys', 'openrouterApiKey'].some(k => k in changes)) refreshIntro();
+    if (['geminiApiKeys', 'groqApiKeys', 'openrouterApiKey', 'deepseekApiKeys'].some(k => k in changes)) refreshIntro();
   });
 
   if ('serviceWorker' in navigator) {

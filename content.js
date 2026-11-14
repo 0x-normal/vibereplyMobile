@@ -31,14 +31,15 @@
     }
 
     async loadApiKeys() {
-      const keyFields = ['geminiApiKeys', 'geminiApiKey', 'groqApiKeys', 'groqApiKey', 'openrouterApiKey'];
+      const keyFields = ['geminiApiKeys', 'geminiApiKey', 'groqApiKeys', 'groqApiKey', 'openrouterApiKey', 'deepseekApiKeys'];
       const refresh = async () => {
         const r = await chrome.storage.local.get(keyFields);
         let keys = r.geminiApiKeys;
         if (!keys && r.geminiApiKey) keys = [r.geminiApiKey];
         const hasGemini = Array.isArray(keys) && keys.length > 0;
         const hasGroq = (Array.isArray(r.groqApiKeys) && r.groqApiKeys.length > 0) || !!r.groqApiKey;
-        this.hasKeys = hasGemini || hasGroq || !!r.openrouterApiKey;
+        const hasDeepSeek = Array.isArray(r.deepseekApiKeys) && r.deepseekApiKeys.length > 0;
+        this.hasKeys = hasGemini || hasGroq || hasDeepSeek || !!r.openrouterApiKey;
       };
       try {
         await refresh();

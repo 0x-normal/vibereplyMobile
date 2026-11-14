@@ -223,6 +223,27 @@ setupKeyManager({
   }
 });
 
+// Paid; before or after Gemini depending on the "Use DeepSeek first" switch
+setupKeyManager({
+  name: 'DeepSeek',
+  storageKey: 'deepseekApiKeys',
+  legacyKey: 'deepseekApiKey',
+  prefix: 'sk-',
+  ids: {
+    input: 'deepseekKeys', save: 'saveDeepseekBtn', reset: 'resetDeepseekBtn',
+    status: 'deepseekStatus', section: 'deepseekStatusSection', list: 'deepseekStatusList'
+  }
+});
+
+const deepseekFirstBox = document.getElementById('deepseekFirst');
+document.addEventListener('DOMContentLoaded', async () => {
+  const { deepseekFirst } = await chrome.storage.local.get(['deepseekFirst']);
+  deepseekFirstBox.checked = deepseekFirst !== false;
+});
+deepseekFirstBox.addEventListener('change', () => {
+  chrome.storage.local.set({ deepseekFirst: deepseekFirstBox.checked });
+});
+
 // Fallback after Gemini, before OpenRouter
 setupKeyManager({
   name: 'Groq',

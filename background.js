@@ -33,7 +33,8 @@ const TIMEOUT_GEMINI_MS = 20000;
 // Flash-Lite normally answers in 1 to 3s; if it's that slow, it's stuck, so move on sooner
 const MODEL_TIMEOUTS = { 'gemini-3.5-flash-lite': 12000, 'gemini-3.8-flash': 20000 };
 const TIMEOUT_OPENROUTER_MS = 25000;
-const TIMEOUT_GROQ_MS = 12000; // Groq is fast; if it isn't answering, move on
+const TIMEOUT_GROQ_MS = 20000; // Groq is fast, but its models now think briefly before answering
+const TIMEOUT_DEEPSEEK_MS = 25000; // DeepSeek Flash thinks briefly first; usually answers in a few seconds
 const TOTAL_BUDGET_MS = 60000; // stop trying new keys/models after this
 const geminiEndpoint = model =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -136,7 +137,8 @@ const STATEMENTS_SHOWN = 4;
 const REPLIES_SHOWN = QUESTIONS_SHOWN + STATEMENTS_SHOWN;
 
 // Describes the post (text, author, quote, link card, media) for any prompt.
-function describePost(tweetText, context = {}, hasMedia, mediaKind) {
+// mediaHidden: the post has media but this model can't see it (text-only fallback model).
+function describePost(tweetText, context = {}, hasMedia, mediaKind, mediaHidden = false) {
   const lines = [];
   if (context.author) lines.push(`Posted by: ${context.author}`);
   if (context.replyingTo) lines.push(`This post is itself a reply to: ${context.replyingTo}`);
@@ -150,6 +152,8 @@ function describePost(tweetText, context = {}, hasMedia, mediaKind) {
     lines.push(mediaKind === 'video'
       ? 'It has a video. You only get one still frame of it (attached), so don\'t claim to know what happens in the video beyond that frame and the text.'
       : `It has ${mediaKind} (attached).`);
+  } else if (mediaHidden && mediaKind && mediaKind !== 'none') {
+    lines.push(`It has ${mediaKind}, but you can't see it. Don't guess or describe what it shows; react to the text${context.altTexts?.length ? ' and the image descriptions' : ''}.`);
   } else {
     lines.push('No media you can see; go by the text.');
   }
@@ -203,14 +207,23 @@ Post: "anyone else's landlord ignoring repair requests for months?"
   bad: "So relatable! Landlords can be so frustrating sometimes."
   good: "put every request in writing with dates, it matters later"`;
 
-function buildPrompt(tweetText, hasMedia, mediaKind, context, styleExamples) {
+// opts.mediaHidden: see describePost.
+// opts.keyPoints: also ask for "key_points" (the concrete things in the post) before the
+// replies. Smaller models (Groq) write much more on-topic replies when they list these first.
+function buildPrompt(tweetText, hasMedia, mediaKind, context, styleExamples, opts = {}) {
+  const keyPointsStep = opts.keyPoints ? `
+STEP 1b. In "key_points", list 2 to 4 concrete things from the post that a reply can react to: the main claim, names, numbers, what is in the image. Copy them from the post; don't invent any. Every reply below must be clearly about one of these, so that someone reading only the reply can tell which post it is under.
+` : '';
+  const shape = opts.keyPoints
+    ? '{"read": "...", "key_points": ["...", "..."], "replies": ["...", "..."], "questions": ["...", "..."]}'
+    : '{"read": "...", "replies": ["...", "..."], "questions": ["...", "..."]}';
   return `You suggest replies for someone scrolling X. Write like a regular person who actually read this post, not like an assistant.
 
 THE POST
-${describePost(tweetText, context, hasMedia, mediaKind)}
+${describePost(tweetText, context, hasMedia, mediaKind, opts.mediaHidden)}
 
 STEP 1. In "read", write one plain sentence: what the post is saying or showing, and what the poster is going for (a laugh, agreement, debate, news, an opinion, asking for help...). If something is unclear, say so instead of guessing.
-
+${keyPointsStep}
 STEP 2. Write replies a real person might post under it, based on your "read", in two lists:
 - "replies": exactly ${STATEMENT_CANDIDATES} replies that are NOT questions. Mix them: a quick reaction, agreeing or disagreeing with a reason, a take, a small observation, adding something useful. None of them may be a question, a rhetorical question, or end with "?".
 - "questions": exactly ${QUESTION_CANDIDATES} real questions you'd actually want the poster to answer, each about something specific in the post.
@@ -221,7 +234,7 @@ ${describeStyle(styleExamples)}
 ${REPLY_EXAMPLES}
 
 Output ONLY valid JSON, nothing else:
-{"read": "...", "replies": ["...", "..."], "questions": ["...", "..."]}`;
+${shape}`;
 }
 
 // Casual questions often drop the "?", so also look at how the reply starts.
@@ -285,11 +298,11 @@ function pickReplyMix(replies) {
   return out;
 }
 
-function buildImprovePrompt(tweetText, hasMedia, mediaKind, myReply, context, styleExamples) {
+function buildImprovePrompt(tweetText, hasMedia, mediaKind, myReply, context, styleExamples, opts = {}) {
   return `You are helping someone polish their reply to an X (Twitter) post.
 
 THE POST
-${describePost(tweetText, context, hasMedia, mediaKind)}
+${describePost(tweetText, context, hasMedia, mediaKind, opts.mediaHidden)}
 
 Their draft reply: "${myReply}"
 ${describeStyle(styleExamples)}
@@ -348,9 +361,10 @@ function parseReplyList(text) {
       read = String(obj.read || obj.understanding || '').replace(/\s+/g, ' ').trim();
       // Every list of strings in the answer ("replies", "questions", or another name);
       // each reply is sorted into question / not-question by its text afterwards
-      replies = Object.values(obj)
-        .filter(v => Array.isArray(v))
-        .flat()
+      // ("key_points" is the model's notes about the post, not replies)
+      replies = Object.entries(obj)
+        .filter(([k, v]) => Array.isArray(v) && !/^(key_?points|details|facts|notes)$/i.test(k))
+        .flatMap(([, v]) => v)
         .map(s => String(s).trim())
         .filter(Boolean);
     }
@@ -390,6 +404,97 @@ function parseReplies(text) {
   // Fallback: split lines
   const lines = cleaned.split(/\n+/).map(l => l.replace(/^\s*[-*\d.\)\"]+\s*/, '').replace(/\"$/, '').trim()).filter(Boolean);
   return lines.slice(0, REPLY_CANDIDATES);
+}
+
+// ---- DeepSeek's own reply prompt (written by the user, kept word for word) ----
+// 7 replies in a crypto-Twitter voice, one per reply type, in the type order.
+// Tuned to be supportive: takes the post at face value instead of doubting it.
+const DEEPSEEK_REPLY_COUNT = 7;
+
+function buildDeepSeekPrompt(tweetText, hasMedia, mediaKind, context = {}) {
+  const mediaLine = hasMedia
+    ? `The post also contains ${mediaKind} (attached). Look at the visual content carefully.`
+    : `The post has no media; rely on the caption.`;
+  // Who posted it and the post it quotes, when there is one (only these two lines are added)
+  const authorLine = context.author ? `Author: ${context.author}\n` : '';
+  const quotedLine = context.quoted
+    ? `\nQuoted post by ${context.quoted.author || 'someone'}: "${context.quoted.text || '(no text)'}"`
+    : '';
+
+  return `You are @0xnormal_, a crypto-native builder replying on X. Your niche: crypto Twitter, crypto markets, AI, global politics, self-development, and building SaaS solo.
+
+POST
+${authorLine}Text: "${tweetText || '(no text)'}"${quotedLine}
+Media: ${mediaLine || '(no media description)'}
+
+TASK
+Write 7 reply options to THIS exact post. The goal is a reply that gets likes and profile clicks from the post's audience because it adds something: a useful angle, a real question, or genuine hype with a reason. Agreeing is fine when you add something.
+
+THE ONE RULE THAT MATTERS MOST
+Each reply must react to one specific claim, number, or detail in the post. If a reply could sit under 100 other posts, rewrite it.
+If the post has no text, react only to the media.
+Take the post at face value. Don't doubt the author's numbers, results, or story. Build on it, don't fact-check it.
+
+REPLY TYPES (use each one exactly once)
+1. add value: a missing fact, a second-order effect, or "what this actually means"
+2. different angle: a "yes, and", something the author didn't mention that makes the point stronger. Only name a risk when the post is about money, hacks, or losses
+3. builder angle: how a founder, trader, or builder should act on this
+4. sharp question: one short question that makes the author want to reply
+5. one-liner: a punchy, witty CT-style line, under 8 words
+6. personal take: a short first-person reaction or experience ("been there", "i'd do X")
+7. simple breakdown: explain the post's point in plain words for someone new
+
+STYLE
+- Max 25 words each. At least 3 replies under 10 words.
+- CT voice: lowercase, short lines, confident, no corporate tone.
+- Never end a reply with a period. Question marks are fine for questions.
+- Sound like a peer who's in the market or building: supportive, not a cheerleader and not a critic.
+- Only use numbers that appear in the post. Never invent stats, prices, or dates.
+- Match the post's mood: serious on hacks, losses, and politics; playful on memes; on wins and milestones, be genuinely happy for them and build on it.
+
+DO NOT
+- Use hashtags, links, or @mentions (except the author when needed).
+- Use more than 1 emoji in the whole set.
+- Shill coins, give price targets, or say "not financial advice".
+- Take a hard partisan side on politics. Explain the impact instead.
+- Repeat or paraphrase the post.
+- Use filler: "great post", "this 👆", "so true", "facts", "huge if true", "bullish" alone, "wagmi", "lfg", "this is the way", "who else", "can't stress this enough", "game changer".
+- Start two replies with the same word.
+
+EXAMPLES
+Post: "BTC ETFs saw $1.5B in outflows this week"
+Bad: "wow bearish times ahead."
+Good: "outflows matter less than who's selling. basis trade unwinds look the same on the chart"
+Good: "who's buying what they sell?"
+
+Post: "I quit my job to build a SaaS"
+Bad: "most solo saas die in year one, hope you saved up"
+Good: "build the distribution before the product runs out your savings"
+
+OUTPUT
+Return ONLY a valid JSON array of 7 strings, in the type order above. No extra text, no markdown, no code fences. No string may end with "."
+["reply one", "reply two", "reply three", "reply four", "reply five", "reply six", "reply seven"]`;
+}
+
+// Light cleanup that respects this prompt's rules: the author's @mention and one emoji
+// are allowed, so only quotes, hashtags, dashes and a final period are fixed.
+function cleanDeepSeekReply(s) {
+  return fixDashes(String(s)
+    .replace(/^["'“‘]+|["'”’]+$/g, '')
+    .replace(/(^|\s)#\w+/g, '$1'))
+    .replace(/(?<!\.)\.\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// A JSON array of 7 replies, shown in the prompt's type order
+function parseDeepSeekReplies(text) {
+  const replies = parseReplies(text);
+  if (replies.length < 2) {
+    console.error('vibeReply: parse failed, raw text was:', text);
+    throw new Error('Could not parse the replies.');
+  }
+  return { read: '', replies: replies.slice(0, DEEPSEEK_REPLY_COUNT).map(cleanDeepSeekReply).filter(Boolean) };
 }
 
 // ---- Multi-key rotation helpers ----
@@ -543,10 +648,47 @@ async function callOpenRouterOnce(apiKey, mediaParts, prompt, parse, timeoutMs =
 // OpenAI-compatible API. Qwen 3.8 reads images (max 3); gpt-oss is text-only and
 // is used if Qwen is unavailable, overloaded, or out of quota.
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+// These smaller models write nonsense replies when they answer without thinking or run
+// at temperature 1.0, so both think briefly first (hidden from the answer) and run cooler
+// (Groq recommends 0.5 to 0.7 for Qwen).
 const GROQ_MODELS = [
-  { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8', vision: true, maxImages: 3, extra: { reasoning_effort: 'none' } },
-  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', vision: false, extra: { reasoning_effort: 'low' } }
+  {
+    id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8', vision: true, maxImages: 3,
+    sampling: { temperature: 0.7, top_p: 0.9 },
+    reasoning: { reasoning_effort: 'low', reasoning_format: 'hidden' }
+  },
+  {
+    id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', vision: false,
+    sampling: { temperature: 0.8 },
+    reasoning: { reasoning_effort: 'medium', include_reasoning: false }
+  }
 ];
+
+const REPLY_SYSTEM = `You write short replies to X (Twitter) posts the way a normal, sharp person would. First work out what the post actually says or shows and what the poster wants, then reply to exactly that. Every reply must make sense under this post and nowhere else: no generic lines, no random jokes, nothing that ignores what the post is about. Never reuse the content of the examples. Answer with JSON only.`;
+
+// Groq can force the answer into an exact JSON shape (Structured Outputs), so a reply list
+// never comes back broken or with extra fields.
+const stringList = { type: 'array', items: { type: 'string' } };
+const GROQ_SCHEMAS = new Map([
+  [parseReplyList, {
+    name: 'replies',
+    schema: {
+      type: 'object',
+      properties: { read: { type: 'string' }, key_points: stringList, replies: stringList, questions: stringList },
+      required: ['read', 'key_points', 'replies', 'questions'],
+      additionalProperties: false
+    }
+  }],
+  [parseImprove, {
+    name: 'improved_reply',
+    schema: {
+      type: 'object',
+      properties: { feedback: { type: 'string' }, fixed: { type: 'string' }, alternatives: stringList },
+      required: ['feedback', 'fixed', 'alternatives'],
+      additionalProperties: false
+    }
+  }]
+]);
 
 async function callGroqOnce(apiKey, model, mediaParts, prompt, parse, timeoutMs) {
   const userContent = [];
@@ -560,27 +702,48 @@ async function callGroqOnce(apiKey, model, mediaParts, prompt, parse, timeoutMs)
   }
   userContent.push({ type: 'text', text: prompt });
 
+  const schema = GROQ_SCHEMAS.get(parse);
   const body = {
     model: model.id,
-    // Text-only models take a plain string
-    messages: [{ role: 'user', content: model.vision ? userContent : prompt }],
-    temperature: 1.0,
-    max_completion_tokens: 2048,
-    ...model.extra
+    messages: [
+      { role: 'system', content: REPLY_SYSTEM },
+      // Text-only models take a plain string
+      { role: 'user', content: model.vision ? userContent : prompt }
+    ],
+    ...model.sampling,
+    // Room for the hidden thinking plus the short JSON answer
+    max_completion_tokens: 4096,
+    ...model.reasoning,
+    response_format: schema
+      ? { type: 'json_schema', json_schema: { name: schema.name, strict: true, schema: schema.schema } }
+      : { type: 'json_object' }
   };
 
-  const res = await fetchWithTimeout(GROQ_ENDPOINT, {
+  const started = Date.now();
+  const send = () => fetchWithTimeout(GROQ_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify(body)
-  }, timeoutMs);
+  }, Math.max(1000, timeoutMs - (Date.now() - started)));
+  const errorMessage = r => r.data?.error?.message || `HTTP ${r.status}`;
+
+  let res = await send();
+  // If Groq rejects the JSON format or thinking settings for this model, retry once
+  // without them rather than skipping a working model
+  if (!res.ok && res.status === 400 && /json|schema|response_format|reasoning/i.test(errorMessage(res))) {
+    console.warn(`vibeReply: Groq ${model.id} rejected a setting (${errorMessage(res)}); retrying without it`);
+    if (/reasoning/i.test(errorMessage(res))) {
+      Object.keys(model.reasoning || {}).forEach(k => { delete body[k]; });
+    }
+    delete body.response_format;
+    res = await send();
+  }
 
   if (!res.ok) {
-    const msg = res.data?.error?.message || `HTTP ${res.status}`;
-    const err = new Error(msg);
+    const err = new Error(errorMessage(res));
     err.status = res.status;
     throw err;
   }
@@ -619,9 +782,12 @@ async function tryGroq(allKeys, available, state, mediaParts, buildPromptFn, par
 
   nextModel:
   for (const model of GROQ_MODELS) {
-    // A text-only model gets a prompt that doesn't mention attached media
+    // A text-only model is told the post has media it can't see, so it doesn't guess
     const usableMedia = model.vision ? images : [];
-    const prompt = buildPromptFn(usableMedia.length > 0);
+    const prompt = buildPromptFn(usableMedia.length > 0, {
+      keyPoints: true,
+      mediaHidden: mediaParts.length > 0 && usableMedia.length === 0
+    });
 
     for (const key of [...pool]) {
       if ((limits[key][model.id] || 0) > Date.now()) continue;
@@ -675,6 +841,139 @@ async function getOpenRouterKey() {
   return r.openrouterApiKey || '';
 }
 
+// ---- DeepSeek (paid, cheap; reads images) ----
+const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
+const DEEPSEEK_MODEL = 'deepseek-flash';
+const DEEPSEEK_MAX_IMAGES = 4;
+
+async function getDeepSeekSettings() {
+  const r = await chrome.storage.local.get(['deepseekApiKeys', 'deepseekFirst']);
+  return {
+    keys: Array.isArray(r.deepseekApiKeys) ? r.deepseekApiKeys : [],
+    // On by default: when you've added a paid DeepSeek key, it's what you want answering
+    first: r.deepseekFirst !== false
+  };
+}
+
+// original: send DeepSeek's own reply prompt as is (no system message, plain answer).
+// It thinks briefly first, which makes it follow the rules (no made-up numbers, length)
+// much better. DeepSeek ignores temperature while thinking; 0.7 applies only if thinking
+// is ever rejected and the request is retried without it.
+async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, original = false) {
+  const content = images.slice(0, DEEPSEEK_MAX_IMAGES).map(p => ({
+    type: 'image_url',
+    image_url: { url: `data:${p.inline_data.mime_type};base64,${p.inline_data.data}` }
+  }));
+  content.push({ type: 'text', text: prompt });
+  const user = { role: 'user', content: images.length ? content : prompt };
+
+  const body = original
+    ? {
+      model: DEEPSEEK_MODEL,
+      messages: [user],
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'low',
+      temperature: 0.7,
+      // Room for the short thinking plus 7 replies
+      max_tokens: 4096,
+      stream: false
+    }
+    : {
+      model: DEEPSEEK_MODEL,
+      messages: [{ role: 'system', content: REPLY_SYSTEM }, user],
+      // A short think first gives much more sensible replies; "low" keeps it quick
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'low',
+      // JSON mode (the prompt includes the word JSON and an example, as DeepSeek requires)
+      response_format: { type: 'json_object' },
+      max_tokens: 4096,
+      stream: false
+    };
+
+  const started = Date.now();
+  const send = () => fetchWithTimeout(DEEPSEEK_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  }, Math.max(1000, timeoutMs - (Date.now() - started)));
+  const errorMessage = r => r.data?.error?.message || `HTTP ${r.status}`;
+
+  let res = await send();
+  // If a setting is rejected, retry once without it rather than giving up on DeepSeek
+  if (!res.ok && (res.status === 400 || res.status === 422)) {
+    const msg = errorMessage(res);
+    let changed = false;
+    if (/thinking|reasoning/i.test(msg)) { delete body.thinking; delete body.reasoning_effort; changed = true; }
+    if (/json|response_format/i.test(msg)) { delete body.response_format; changed = true; }
+    if (changed) {
+      console.warn(`vibeReply: DeepSeek rejected a setting (${msg}); retrying without it`);
+      res = await send();
+    }
+  }
+  if (!res.ok) {
+    const err = new Error(errorMessage(res));
+    err.status = res.status;
+    throw err;
+  }
+
+  const data = res.data;
+  console.log('vibeReply: raw DeepSeek response', data);
+  const text = String(data?.choices?.[0]?.message?.content || '').trim();
+  if (!text) {
+    // DeepSeek's JSON mode sends blank content when the model's JSON was invalid
+    const err = new Error('DeepSeek returned an empty answer.');
+    err.status = 'empty';
+    throw err;
+  }
+  return parse(text);
+}
+
+// Tries each usable DeepSeek key. Out of balance (402) and rate limits (429) are
+// remembered in keyState so the next request skips that key for a while.
+// original: { buildPromptFn, parse } to use DeepSeek's own reply prompt instead
+async function tryDeepSeek(allKeys, available, mediaParts, buildPromptFn, parse, timeLeft, onProgress, original = null) {
+  const images = mediaParts.filter(p => p.inline_data.mime_type.startsWith('image/'));
+  const prompt = original
+    ? original.buildPromptFn(images.length > 0)
+    : buildPromptFn(images.length > 0, {
+      keyPoints: true,
+      mediaHidden: mediaParts.length > 0 && images.length === 0
+    });
+  if (original) parse = original.parse;
+  let lastErr = null;
+  for (const key of available) {
+    const keyNum = allKeys.indexOf(key) + 1;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const budget = Math.min(TIMEOUT_DEEPSEEK_MS, timeLeft());
+      if (budget < 3000) throw lastErr || new Error('DeepSeek: out of time.');
+      try {
+        console.log(`vibeReply: trying DeepSeek key #${keyNum}`);
+        onProgress(`Asking DeepSeek Flash (key ${keyNum})...`);
+        const out = await callDeepSeekOnce(key, images, prompt, parse, budget, !!original);
+        return { ...out, model: 'DeepSeek Flash' };
+      } catch (err) {
+        lastErr = err;
+        const status = err.status;
+        console.warn(`vibeReply: DeepSeek key #${keyNum} failed (${status || 'no-status'}): ${err.message}`);
+        // Blank JSON answer: one more try on the same key usually works
+        if (status === 'empty' && attempt === 0) continue;
+        if (status === 401 || status === 403) {
+          await updateKeyState(key, { invalid: true, lastError: err.message });
+        } else if (status === 402) {
+          lastErr = new Error('DeepSeek account is out of balance. Top up at platform.deepseek.com.');
+          await updateKeyState(key, { exhaustedUntil: Date.now() + 30 * 60000, lastError: lastErr.message });
+        } else if (status === 429) {
+          await updateKeyState(key, { exhaustedUntil: Date.now() + 60000, lastError: err.message });
+        } else if (status === 400 || status === 422) {
+          throw err; // the request itself is wrong; another key won't help
+        }
+        break; // next key
+      }
+    }
+  }
+  throw lastErr || new Error('DeepSeek: nothing left to try.');
+}
+
 // ---- Main entries ----
 async function getStyleExamples() {
   const r = await chrome.storage.local.get(['styleExamples']);
@@ -686,8 +985,13 @@ async function generateReplies({ tweetText, mediaUrls, mediaKind, context, onPro
   return runWithProviders({
     mediaUrls,
     onProgress,
-    buildPromptFn: hasMedia => buildPrompt(tweetText, hasMedia, mediaKind || 'media', context, style),
-    parse: parseReplyList
+    buildPromptFn: (hasMedia, opts) => buildPrompt(tweetText, hasMedia, mediaKind || 'media', context, style, opts),
+    parse: parseReplyList,
+    // DeepSeek writes replies with its own prompt (7 replies, crypto-Twitter voice)
+    deepseekOriginal: {
+      buildPromptFn: hasMedia => buildDeepSeekPrompt(tweetText, hasMedia, mediaKind || 'media', context),
+      parse: parseDeepSeekReplies
+    }
   });
 }
 
@@ -698,27 +1002,30 @@ async function improveReply({ tweetText, mediaUrls, mediaKind, context, myReply,
   return runWithProviders({
     mediaUrls,
     onProgress,
-    buildPromptFn: hasMedia => buildImprovePrompt(tweetText, hasMedia, mediaKind || 'media', draft, context, style),
+    buildPromptFn: (hasMedia, opts) => buildImprovePrompt(tweetText, hasMedia, mediaKind || 'media', draft, context, style, opts),
     parse: parseImprove
   });
 }
 
-// ---- Rotate through Gemini keys, then Groq, then OpenRouter ----
-async function runWithProviders({ mediaUrls, buildPromptFn, parse, onProgress = () => {} }) {
+// ---- Rotate through DeepSeek (when first), Gemini keys, DeepSeek (when not first), Groq, then OpenRouter ----
+// deepseekOriginal: optional { buildPromptFn, parse } that DeepSeek uses instead of the shared prompt
+async function runWithProviders({ mediaUrls, buildPromptFn, parse, deepseekOriginal = null, onProgress = () => {} }) {
   const started = Date.now();
   const deadline = started + TOTAL_BUDGET_MS;
   const timeLeft = () => deadline - Date.now();
   // Adds which model answered and how long the whole request took
   const done = (out, model) => ({ ...out, meta: { model, ms: Date.now() - started } });
-  const [{ keys, state }, groqKeys, openrouterKey, geminiModels] = await Promise.all([
-    getKeysAndState(), getGroqKeys(), getOpenRouterKey(), getGeminiModels()
+  const [{ keys, state }, groqKeys, openrouterKey, geminiModels, deepseek] = await Promise.all([
+    getKeysAndState(), getGroqKeys(), getOpenRouterKey(), getGeminiModels(), getDeepSeekSettings()
   ]);
-  // Groq keys that aren't invalid or waiting out a rate limit (same state map as Gemini keys)
+  // Groq / DeepSeek keys that aren't invalid or waiting out a limit (same state map as Gemini keys)
   const groqAvailable = pickAvailableKeys(groqKeys, state);
   const groqKey = groqAvailable.length > 0;
+  const deepseekAvailable = pickAvailableKeys(deepseek.keys, state);
+  const deepseekKey = deepseekAvailable.length > 0;
 
-  if (!keys.length && !groqKeys.length && !openrouterKey) {
-    throw new Error('No API keys configured. Open the side panel and add a Gemini, Groq, or OpenRouter key.');
+  if (!keys.length && !groqKeys.length && !openrouterKey && !deepseek.keys.length) {
+    throw new Error('No API keys configured. Open the side panel and add a Gemini, DeepSeek, Groq, or OpenRouter key.');
   }
 
   // Fetch media once (shared across all attempts), all in parallel
@@ -741,13 +1048,28 @@ async function runWithProviders({ mediaUrls, buildPromptFn, parse, onProgress = 
   });
   const hasMedia = mediaParts.length > 0;
   const prompt = buildPromptFn(hasMedia);
-
-  // 1) Try every available Gemini key in order, each with every model
   const available = pickAvailableKeys(keys, state);
   let lastErr = null;
 
-  // Keep some time for Groq / OpenRouter if they're configured
-  const reserved = (groqKey ? TIMEOUT_GROQ_MS : 0) + (openrouterKey ? TIMEOUT_OPENROUTER_MS : 0);
+  // 0) DeepSeek first, when it's set to go first (the default once a key is added)
+  if (deepseek.first && deepseekKey) {
+    const othersLeft = available.length > 0 || groqKey || !!openrouterKey;
+    // Leave time for the other providers in case DeepSeek fails
+    const dsTimeLeft = () => timeLeft() - (othersLeft ? 15000 : 0);
+    try {
+      const { model, ...out } = await tryDeepSeek(deepseek.keys, deepseekAvailable, mediaParts, buildPromptFn, parse, dsTimeLeft, onProgress, deepseekOriginal);
+      return done(out, model);
+    } catch (err) {
+      lastErr = err;
+      console.error('vibeReply: DeepSeek failed:', err.message);
+    }
+  }
+
+  // 1) Try every available Gemini key in order, each with every model
+
+  // Keep some time for DeepSeek (when it comes after Gemini) / Groq / OpenRouter if they're configured
+  const reserved = (deepseekKey && !deepseek.first ? TIMEOUT_DEEPSEEK_MS : 0) +
+    (groqKey ? TIMEOUT_GROQ_MS : 0) + (openrouterKey ? TIMEOUT_OPENROUTER_MS : 0);
   const geminiBudgetLeft = () => timeLeft() - reserved;
   let stopGemini = false;
   let ranOutOfTime = false;
@@ -804,7 +1126,19 @@ async function runWithProviders({ mediaUrls, buildPromptFn, parse, onProgress = 
     retiredModels.clear();
   }
 
-  // 2) Fall back to Groq if a key is usable (keep time for OpenRouter after it)
+  // 2) DeepSeek after Gemini, when it isn't set to go first
+  if (!deepseek.first && deepseekKey) {
+    const dsTimeLeft = () => timeLeft() - (groqKey ? 8000 : 0) - (openrouterKey ? 8000 : 0);
+    try {
+      const { model, ...out } = await tryDeepSeek(deepseek.keys, deepseekAvailable, mediaParts, buildPromptFn, parse, dsTimeLeft, onProgress, deepseekOriginal);
+      return done(out, model);
+    } catch (err) {
+      lastErr = err;
+      console.error('vibeReply: DeepSeek fallback failed:', err.message);
+    }
+  }
+
+  // 3) Fall back to Groq if a key is usable (keep time for OpenRouter after it)
   if (groqKey) {
     const groqTimeLeft = () => timeLeft() - (openrouterKey ? TIMEOUT_OPENROUTER_MS : 0);
     try {
@@ -831,11 +1165,13 @@ async function runWithProviders({ mediaUrls, buildPromptFn, parse, onProgress = 
     }
   }
 
-  // 4) Nothing worked
+  // 5) Nothing worked
   if (!available.length && !groqKey && !openrouterKey) {
-    throw new Error(groqKeys.length
-      ? 'All Gemini and Groq keys are out of quota or invalid. Check Key Status in the side panel, or add another key.'
-      : 'All Gemini keys are exhausted or invalid, and no Groq or OpenRouter key is configured.');
+    // DeepSeek was the only one left to try: show its own reason (e.g. out of balance)
+    if (deepseekKey && lastErr) throw new Error(`DeepSeek failed: ${lastErr.message}`);
+    throw new Error(groqKeys.length || deepseek.keys.length
+      ? 'All your keys are out of quota, out of balance, or invalid. Check Key Status in the side panel, or add another key.'
+      : 'All Gemini keys are exhausted or invalid, and no DeepSeek, Groq, or OpenRouter key is configured.');
   }
   if (ranOutOfTime && !groqKey && !openrouterKey) {
     throw new Error(`Gemini is too slow right now (gave up after ${Math.round(TOTAL_BUDGET_MS / 1000)}s). Last error: ${lastErr?.message || 'none'}. Try again in a minute.`);
