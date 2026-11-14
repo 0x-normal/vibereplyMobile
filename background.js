@@ -408,7 +408,7 @@ function parseReplies(text) {
 
 // ---- DeepSeek's own reply prompt (written by the user, kept word for word) ----
 // 7 replies in a crypto-Twitter voice, one per reply type, in the type order.
-// Tuned to be supportive: takes the post at face value instead of doubting it.
+// Tuned to be supportive (takes the post at face value) and plain (readable in one quick read).
 const DEEPSEEK_REPLY_COUNT = 7;
 
 function buildDeepSeekPrompt(tweetText, hasMedia, mediaKind, context = {}) {
@@ -434,19 +434,21 @@ THE ONE RULE THAT MATTERS MOST
 Each reply must react to one specific claim, number, or detail in the post. If a reply could sit under 100 other posts, rewrite it.
 If the post has no text, react only to the media.
 Take the post at face value. Don't doubt the author's numbers, results, or story. Build on it, don't fact-check it.
+Anyone scrolling must understand each reply in one quick read. Use plain everyday words and simple, complete sentences. No riddles, metaphors, slogans, or clever compressed lines. If it needs a second read, rewrite it.
 
 REPLY TYPES (use each one exactly once)
-1. add value: a missing fact, a second-order effect, or "what this actually means"
+1. add value: a useful point or tip that builds on the post, said plainly
 2. different angle: a "yes, and", something the author didn't mention that makes the point stronger. Only name a risk when the post is about money, hacks, or losses
 3. builder angle: how a founder, trader, or builder should act on this
 4. sharp question: one short question that makes the author want to reply
-5. one-liner: a punchy, witty CT-style line, under 8 words
+5. one-liner: a short, clear, fun reaction anyone gets instantly, under 8 words
 6. personal take: a short first-person reaction or experience ("been there", "i'd do X")
 7. simple breakdown: explain the post's point in plain words for someone new
 
 STYLE
 - Max 25 words each. At least 3 replies under 10 words.
-- CT voice: lowercase, short lines, confident, no corporate tone.
+- Short but complete: never drop words just to make it shorter.
+- Voice: lowercase, casual, like texting a friend. No corporate tone, no poetic tone. No semicolons.
 - Never end a reply with a period. Question marks are fine for questions.
 - Sound like a peer who's in the market or building: supportive, not a cheerleader and not a critic.
 - Only use numbers that appear in the post. Never invent stats, prices, or dates.
@@ -470,6 +472,10 @@ Good: "who's buying what they sell?"
 Post: "I quit my job to build a SaaS"
 Bad: "most solo saas die in year one, hope you saved up"
 Good: "build the distribution before the product runs out your savings"
+
+Post: "The person you will be in 5 years depends on the books you read, the friends you meet, the money you invest..."
+Bad: "friends set defaults; defaults beat discipline most days"
+Good: "the friends one is so underrated, you slowly turn into the people you hang out with"
 
 OUTPUT
 Return ONLY a valid JSON array of 7 strings, in the type order above. No extra text, no markdown, no code fences. No string may end with "."
