@@ -423,7 +423,7 @@ THE POST
 ${describePost(tweetText, context, hasMedia, mediaKind, opts.mediaHidden)}
 
 STEP 1. Understand the post before writing anything.
-- "read": one plain sentence: what the post says or shows, and what the author wants from it (a laugh, support, a debate, sharing news or a win, asking for help). If part of it is unclear, say which part instead of guessing.
+- "read": one plain sentence: what the post says or shows, and what the author wants from replies (answers to their question, a laugh, support, a debate, reactions to news or a win, help). If part of it is unclear, say which part instead of guessing.
 - "key_points": 2 to 4 concrete things from the post a reply can react to: the main claim, a name, a number, an event, what is in the image. Copy them from the post; never invent any.
 
 STEP 2. Write 7 replies to THIS exact post. The goal is a reply the post's audience likes because it adds something: a useful angle, a real question, or genuine hype with a reason. Agreeing is fine when you add something.
@@ -434,7 +434,14 @@ If the post has no text, react only to the media.
 Take the post at face value. Don't doubt the author's numbers, results, or story. Build on it, don't fact-check it.
 Anyone scrolling must understand each reply in one quick read. Use plain everyday words and simple, complete sentences. No riddles, metaphors, slogans, or clever compressed lines. If it needs a second read, rewrite it.
 
-REPLY TYPES (use each one exactly once, every one about this post's own subject)
+WHEN THE POST ASKS ITS AUDIENCE SOMETHING
+If the author asks readers a real question ("what's one...", "what's your...", "name a...", "drop your...", "which would you pick", a poll, asking for recommendations), skip the reply types below. All 7 replies must directly answer the question:
+- Each one names a concrete answer (the actual skill, book, tool, place, choice...) plus a short reason, so it works as a reply on its own.
+- 7 different answers. Never give the same answer twice.
+- Never ask a question back, give general advice instead of an answer, or explain the question.
+- Vary the shape: just the answer, the answer and why, a less obvious answer, who it helps most, "i'd say X because...". Mostly common, sensible answers, plus one or two less obvious ones.
+
+REPLY TYPES (for every other post: use each one exactly once, every one about this post's own subject)
 1. add value: a useful point or tip about the post's subject, said plainly
 2. different angle: a "yes, and": another side of the same subject the author didn't mention, that makes their point stronger. Only name a risk when the post is about money, hacks, or losses
 3. practical angle: what someone should actually do with this. Use a founder, trader, or builder view only when the post is about building, markets, or work; otherwise give the takeaway for a normal person
@@ -475,15 +482,21 @@ Post: "The person you will be in 5 years depends on the books you read, the frie
 Bad: "friends set defaults; defaults beat discipline most days"
 Good: "the friends one is so underrated, you slowly turn into the people you hang out with"
 
+Post: "what's one book everyone should read at least once?"
+Bad: "which one changed your life the most" (asks back instead of answering)
+Bad: "reading 10 pages a day beats reading nothing" (advice, doesn't name a book)
+Good: "the psychology of money, it explains why smart people still make bad money calls"
+Good: "atomic habits, it makes small changes feel doable"
+
 Post: video, a dog won't get out of the pool while its owner keeps calling it
 Bad: "diamond paws, holding through the noise" (drags crypto into a post that isn't about it)
 Good: "he heard you, he's just not done swimming"
 
 BEFORE YOU ANSWER
-Check each reply against the post: is it about one of your key_points, and would it make sense to the author reading it under their post? Rewrite any that fail.
+Check each reply against the post: is it about one of your key_points, and would it make sense to the author reading it under their post? If the post asked a question, does every reply answer it with a different answer? Rewrite any that fail.
 
 OUTPUT
-Return ONLY valid JSON in exactly this shape, nothing else. "replies" has 7 strings in the type order above, and no reply may end with ".":
+Return ONLY valid JSON in exactly this shape, nothing else. "replies" has 7 strings (in the type order above when you used the types), and no reply may end with ".":
 {"read": "...", "key_points": ["...", "..."], "replies": ["reply one", "reply two", "reply three", "reply four", "reply five", "reply six", "reply seven"]}`;
 }
 
