@@ -34,7 +34,7 @@ const TIMEOUT_GEMINI_MS = 20000;
 const MODEL_TIMEOUTS = { 'gemini-3.5-flash-lite': 12000, 'gemini-3.8-flash': 20000 };
 const TIMEOUT_OPENROUTER_MS = 25000;
 const TIMEOUT_GROQ_MS = 20000; // Groq is fast, but its models now think briefly before answering
-const TIMEOUT_DEEPSEEK_MS = 25000; // DeepSeek Flash thinks briefly first; usually answers in a few seconds
+const TIMEOUT_DEEPSEEK_MS = 40000; // DeepSeek Flash thinks at high effort first for replies; usually 5 to 20s
 const TOTAL_BUDGET_MS = 60000; // stop trying new keys/models after this
 const geminiEndpoint = model =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -406,44 +406,42 @@ function parseReplies(text) {
   return lines.slice(0, REPLY_CANDIDATES);
 }
 
-// ---- DeepSeek's own reply prompt (written by the user, kept word for word) ----
-// 7 replies in a crypto-Twitter voice, one per reply type, in the type order.
-// Tuned to be supportive (takes the post at face value) and plain (readable in one quick read).
+// ---- DeepSeek's own reply prompt (the owner's crypto-Twitter voice and rules) ----
+// 7 replies, one per reply type, in the type order. Supportive (takes the post at face
+// value) and plain (readable in one quick read).
+// To keep replies on the post: the persona sets the voice only, never the topic; the
+// model gets the whole post (describePost: reply-to, link preview, image descriptions,
+// video still-frame note); it first writes how it read the post ("read", shown in the
+// panel, so a misread is easy to spot) and the post's concrete details ("key_points");
+// and every reply must be about one of those details.
 const DEEPSEEK_REPLY_COUNT = 7;
 
-function buildDeepSeekPrompt(tweetText, hasMedia, mediaKind, context = {}) {
-  const mediaLine = hasMedia
-    ? `The post also contains ${mediaKind} (attached). Look at the visual content carefully.`
-    : `The post has no media; rely on the caption.`;
-  // Who posted it and the post it quotes, when there is one (only these two lines are added)
-  const authorLine = context.author ? `Author: ${context.author}\n` : '';
-  const quotedLine = context.quoted
-    ? `\nQuoted post by ${context.quoted.author || 'someone'}: "${context.quoted.text || '(no text)'}"`
-    : '';
+function buildDeepSeekPrompt(tweetText, hasMedia, mediaKind, context = {}, opts = {}) {
+  return `You are @0xnormal_, a crypto-native builder replying on X. You follow crypto Twitter, crypto markets, AI, global politics, self-development, and building SaaS solo. That background is your voice, not your topic: reply about what THIS post is about. Bring up crypto, AI, trading, or SaaS only when the post itself is about them.
 
-  return `You are @0xnormal_, a crypto-native builder replying on X. Your niche: crypto Twitter, crypto markets, AI, global politics, self-development, and building SaaS solo.
+THE POST
+${describePost(tweetText, context, hasMedia, mediaKind, opts.mediaHidden)}
 
-POST
-${authorLine}Text: "${tweetText || '(no text)'}"${quotedLine}
-Media: ${mediaLine || '(no media description)'}
+STEP 1. Understand the post before writing anything.
+- "read": one plain sentence: what the post says or shows, and what the author wants from it (a laugh, support, a debate, sharing news or a win, asking for help). If part of it is unclear, say which part instead of guessing.
+- "key_points": 2 to 4 concrete things from the post a reply can react to: the main claim, a name, a number, an event, what is in the image. Copy them from the post; never invent any.
 
-TASK
-Write 7 reply options to THIS exact post. The goal is a reply that gets likes and profile clicks from the post's audience because it adds something: a useful angle, a real question, or genuine hype with a reason. Agreeing is fine when you add something.
+STEP 2. Write 7 replies to THIS exact post. The goal is a reply the post's audience likes because it adds something: a useful angle, a real question, or genuine hype with a reason. Agreeing is fine when you add something.
 
 THE ONE RULE THAT MATTERS MOST
-Each reply must react to one specific claim, number, or detail in the post. If a reply could sit under 100 other posts, rewrite it.
+Every reply must be clearly about one of your key_points. Someone reading only the reply should be able to tell which post it's under. If a reply could sit under 100 other posts, or drifts to a topic the post isn't about, rewrite it.
 If the post has no text, react only to the media.
 Take the post at face value. Don't doubt the author's numbers, results, or story. Build on it, don't fact-check it.
 Anyone scrolling must understand each reply in one quick read. Use plain everyday words and simple, complete sentences. No riddles, metaphors, slogans, or clever compressed lines. If it needs a second read, rewrite it.
 
-REPLY TYPES (use each one exactly once)
-1. add value: a useful point or tip that builds on the post, said plainly
-2. different angle: a "yes, and", something the author didn't mention that makes the point stronger. Only name a risk when the post is about money, hacks, or losses
-3. builder angle: how a founder, trader, or builder should act on this
-4. sharp question: one short question that makes the author want to reply
-5. one-liner: a short, clear, fun reaction anyone gets instantly, under 8 words
-6. personal take: a short first-person reaction or experience ("been there", "i'd do X")
-7. simple breakdown: explain the post's point in plain words for someone new
+REPLY TYPES (use each one exactly once, every one about this post's own subject)
+1. add value: a useful point or tip about the post's subject, said plainly
+2. different angle: a "yes, and": another side of the same subject the author didn't mention, that makes their point stronger. Only name a risk when the post is about money, hacks, or losses
+3. practical angle: what someone should actually do with this. Use a founder, trader, or builder view only when the post is about building, markets, or work; otherwise give the takeaway for a normal person
+4. sharp question: one short question about a specific detail in the post that makes the author want to reply
+5. one-liner: a short, clear reaction anyone gets instantly, under 8 words. Fun on light posts, plain on serious ones
+6. personal take: a short first-person reaction ("been there", "i'd do X"). No made-up stories, numbers, or results
+7. simple breakdown: say in plain words why the post's point is true or matters, for someone new. Add the why, don't just restate the post
 
 STYLE
 - Max 25 words each. At least 3 replies under 10 words.
@@ -477,9 +475,16 @@ Post: "The person you will be in 5 years depends on the books you read, the frie
 Bad: "friends set defaults; defaults beat discipline most days"
 Good: "the friends one is so underrated, you slowly turn into the people you hang out with"
 
+Post: video, a dog won't get out of the pool while its owner keeps calling it
+Bad: "diamond paws, holding through the noise" (drags crypto into a post that isn't about it)
+Good: "he heard you, he's just not done swimming"
+
+BEFORE YOU ANSWER
+Check each reply against the post: is it about one of your key_points, and would it make sense to the author reading it under their post? Rewrite any that fail.
+
 OUTPUT
-Return ONLY a valid JSON array of 7 strings, in the type order above. No extra text, no markdown, no code fences. No string may end with "."
-["reply one", "reply two", "reply three", "reply four", "reply five", "reply six", "reply seven"]`;
+Return ONLY valid JSON in exactly this shape, nothing else. "replies" has 7 strings in the type order above, and no reply may end with ".":
+{"read": "...", "key_points": ["...", "..."], "replies": ["reply one", "reply two", "reply three", "reply four", "reply five", "reply six", "reply seven"]}`;
 }
 
 // Light cleanup that respects this prompt's rules: the author's @mention and one emoji
@@ -493,14 +498,27 @@ function cleanDeepSeekReply(s) {
     .trim();
 }
 
-// A JSON array of 7 replies, shown in the prompt's type order
+// {"read", "key_points", "replies": [7]} (or a bare array of replies), shown in the
+// prompt's type order. key_points are the model's notes, not replies.
 function parseDeepSeekReplies(text) {
-  const replies = parseReplies(text);
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  // A reply may come back as {"type": ..., "text": ...} instead of a plain string
+  const asText = r => (r && typeof r === 'object' ? r.text || r.reply || '' : r);
+  let read = '';
+  let replies = [];
+  try {
+    const obj = JSON.parse((cleaned.match(/\{[\s\S]*\}/) || [cleaned])[0]);
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      read = String(obj.read || '').replace(/\s+/g, ' ').trim();
+      if (Array.isArray(obj.replies)) replies = obj.replies.map(r => String(asText(r)).trim()).filter(Boolean);
+    }
+  } catch (_) {}
+  if (replies.length < 2) replies = parseReplies(text);
   if (replies.length < 2) {
     console.error('vibeReply: parse failed, raw text was:', text);
     throw new Error('Could not parse the replies.');
   }
-  return { read: '', replies: replies.slice(0, DEEPSEEK_REPLY_COUNT).map(cleanDeepSeekReply).filter(Boolean) };
+  return { read, replies: replies.slice(0, DEEPSEEK_REPLY_COUNT).map(cleanDeepSeekReply).filter(Boolean) };
 }
 
 // ---- Multi-key rotation helpers ----
@@ -861,10 +879,10 @@ async function getDeepSeekSettings() {
   };
 }
 
-// original: send DeepSeek's own reply prompt as is (no system message, plain answer).
-// It thinks briefly first, which makes it follow the rules (no made-up numbers, length)
-// much better. DeepSeek ignores temperature while thinking; 0.7 applies only if thinking
-// is ever rejected and the request is retried without it.
+// original: send DeepSeek's own reply prompt as is (no system message).
+// It thinks at "high" effort (DeepSeek's default; "low" read posts too shallowly and gave
+// replies that were only loosely about the post). DeepSeek ignores temperature while
+// thinking; 0.7 applies only if thinking is ever rejected and the request is retried without it.
 async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, original = false) {
   const content = images.slice(0, DEEPSEEK_MAX_IMAGES).map(p => ({
     type: 'image_url',
@@ -878,10 +896,12 @@ async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, origin
       model: DEEPSEEK_MODEL,
       messages: [user],
       thinking: { type: 'enabled' },
-      reasoning_effort: 'low',
+      reasoning_effort: 'high',
       temperature: 0.7,
-      // Room for the short thinking plus 7 replies
-      max_tokens: 4096,
+      // JSON mode (the prompt includes the word JSON and the exact shape, as DeepSeek requires)
+      response_format: { type: 'json_object' },
+      // Room for the thinking plus the read, key points and 7 replies
+      max_tokens: 8192,
       stream: false
     }
     : {
@@ -940,7 +960,9 @@ async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, origin
 async function tryDeepSeek(allKeys, available, mediaParts, buildPromptFn, parse, timeLeft, onProgress, original = null) {
   const images = mediaParts.filter(p => p.inline_data.mime_type.startsWith('image/'));
   const prompt = original
-    ? original.buildPromptFn(images.length > 0)
+    // mediaHidden: the post has media but none could be sent (describePost says so only
+    // when the post really has media), so the model doesn't guess what it shows
+    ? original.buildPromptFn(images.length > 0, { mediaHidden: images.length === 0 })
     : buildPromptFn(images.length > 0, {
       keyPoints: true,
       mediaHidden: mediaParts.length > 0 && images.length === 0
@@ -995,7 +1017,7 @@ async function generateReplies({ tweetText, mediaUrls, mediaKind, context, onPro
     parse: parseReplyList,
     // DeepSeek writes replies with its own prompt (7 replies, crypto-Twitter voice)
     deepseekOriginal: {
-      buildPromptFn: hasMedia => buildDeepSeekPrompt(tweetText, hasMedia, mediaKind || 'media', context),
+      buildPromptFn: (hasMedia, opts) => buildDeepSeekPrompt(tweetText, hasMedia, mediaKind || 'media', context, opts),
       parse: parseDeepSeekReplies
     }
   });
