@@ -13,6 +13,33 @@
   </div>
 
   <div class="section">
+    <h2>AI On / Off</h2>
+    <div class="form-group speed-options">
+      <label class="speed-option">
+        <input type="checkbox" id="geminiOn" checked>
+        <span><strong>Gemini</strong></span>
+      </label>
+      <label class="speed-option">
+        <input type="checkbox" id="deepseekOn" checked>
+        <span><strong>DeepSeek</strong></span>
+      </label>
+      <label class="speed-option">
+        <input type="checkbox" id="groqOn" checked>
+        <span><strong>Groq</strong></span>
+      </label>
+      <label class="speed-option">
+        <input type="checkbox" id="openrouterOn" checked>
+        <span><strong>OpenRouter</strong></span>
+      </label>
+      <p class="help-text">
+        An AI that is off is skipped, even with keys saved (the keys stay saved). For example, turn off
+        DeepSeek and Gemini to use only Groq.
+      </p>
+      <span id="providerOrder" class="api-status disconnected"></span>
+    </div>
+  </div>
+
+  <div class="section">
     <h2>Gemini API Keys</h2>
     <div class="form-group">
       <label for="apiKeys">Paste new keys, one per line. They are added to your saved keys.</label>

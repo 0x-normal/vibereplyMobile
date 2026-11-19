@@ -235,6 +235,49 @@ setupKeyManager({
   }
 });
 
+// ---- AI on / off ----
+// Each AI can be switched off; it is then skipped even when it has keys.
+// The line under the switches shows which AIs will actually be used, in order.
+const PROVIDERS = [
+  { name: 'Gemini', on: 'geminiOn', hasKey: r => (Array.isArray(r.geminiApiKeys) && r.geminiApiKeys.length > 0) || !!r.geminiApiKey },
+  { name: 'DeepSeek', on: 'deepseekOn', hasKey: r => Array.isArray(r.deepseekApiKeys) && r.deepseekApiKeys.length > 0 },
+  { name: 'Groq', on: 'groqOn', hasKey: r => (Array.isArray(r.groqApiKeys) && r.groqApiKeys.length > 0) || !!r.groqApiKey },
+  { name: 'OpenRouter', on: 'openrouterOn', hasKey: r => !!r.openrouterApiKey }
+];
+const ORDER_FIELDS = ['geminiApiKeys', 'geminiApiKey', 'deepseekApiKeys', 'groqApiKeys', 'groqApiKey',
+  'openrouterApiKey', 'deepseekFirst', ...PROVIDERS.map(p => p.on)];
+const providerOrder = document.getElementById('providerOrder');
+
+async function renderProviderOrder() {
+  const r = await chrome.storage.local.get(ORDER_FIELDS);
+  const [gemini, deepseek, groq, openrouter] = PROVIDERS;
+  // Same order the background uses: DeepSeek before or after Gemini, then Groq, then OpenRouter
+  const order = r.deepseekFirst === false ? [gemini, deepseek, groq, openrouter] : [deepseek, gemini, groq, openrouter];
+  const used = order.filter(p => r[p.on] !== false && p.hasKey(r)).map(p => p.name);
+  if (used.length) {
+    providerOrder.textContent = `Replies come from: ${used.join(', then ')}`;
+    providerOrder.className = 'api-status connected';
+  } else {
+    providerOrder.textContent = PROVIDERS.some(p => p.hasKey(r))
+      ? 'Nothing to use: every AI that has a key is off'
+      : 'No keys added yet';
+    providerOrder.className = 'api-status disconnected';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const r = await chrome.storage.local.get(PROVIDERS.map(p => p.on));
+  PROVIDERS.forEach(p => { document.getElementById(p.on).checked = r[p.on] !== false; });
+  renderProviderOrder();
+});
+PROVIDERS.forEach(p => {
+  const box = document.getElementById(p.on);
+  box.addEventListener('change', () => chrome.storage.local.set({ [p.on]: box.checked }));
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && ORDER_FIELDS.some(k => changes[k])) renderProviderOrder();
+});
+
 const deepseekFirstBox = document.getElementById('deepseekFirst');
 document.addEventListener('DOMContentLoaded', async () => {
   const { deepseekFirst } = await chrome.storage.local.get(['deepseekFirst']);

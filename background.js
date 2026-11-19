@@ -1020,6 +1020,18 @@ async function tryDeepSeek(allKeys, available, mediaParts, buildPromptFn, parse,
 }
 
 // ---- Main entries ----
+// The "AI On / Off" switches in settings (all on unless turned off).
+// An AI that is off is skipped even when it has keys.
+async function getProviderSwitches() {
+  const r = await chrome.storage.local.get(['geminiOn', 'deepseekOn', 'groqOn', 'openrouterOn']);
+  return {
+    gemini: r.geminiOn !== false,
+    deepseek: r.deepseekOn !== false,
+    groq: r.groqOn !== false,
+    openrouter: r.openrouterOn !== false
+  };
+}
+
 async function getStyleExamples() {
   const r = await chrome.storage.local.get(['styleExamples']);
   return Array.isArray(r.styleExamples) ? r.styleExamples : [];
@@ -1053,6 +1065,7 @@ async function improveReply({ tweetText, mediaUrls, mediaKind, context, myReply,
 }
 
 // ---- Rotate through DeepSeek (when first), Gemini keys, DeepSeek (when not first), Groq, then OpenRouter ----
+// (only the ones switched on in settings)
 // deepseekOriginal: optional { buildPromptFn, parse } that DeepSeek uses instead of the shared prompt
 async function runWithProviders({ mediaUrls, buildPromptFn, parse, deepseekOriginal = null, onProgress = () => {} }) {
   const started = Date.now();
@@ -1060,9 +1073,14 @@ async function runWithProviders({ mediaUrls, buildPromptFn, parse, deepseekOrigi
   const timeLeft = () => deadline - Date.now();
   // Adds which model answered and how long the whole request took
   const done = (out, model) => ({ ...out, meta: { model, ms: Date.now() - started } });
-  const [{ keys, state }, groqKeys, openrouterKey, geminiModels, deepseek] = await Promise.all([
-    getKeysAndState(), getGroqKeys(), getOpenRouterKey(), getGeminiModels(), getDeepSeekSettings()
+  const [{ keys: savedGeminiKeys, state }, savedGroqKeys, savedOpenrouterKey, geminiModels, savedDeepseek, on] = await Promise.all([
+    getKeysAndState(), getGroqKeys(), getOpenRouterKey(), getGeminiModels(), getDeepSeekSettings(), getProviderSwitches()
   ]);
+  // An AI switched off in settings is treated as having no keys, so it is skipped
+  const keys = on.gemini ? savedGeminiKeys : [];
+  const groqKeys = on.groq ? savedGroqKeys : [];
+  const openrouterKey = on.openrouter ? savedOpenrouterKey : '';
+  const deepseek = on.deepseek ? savedDeepseek : { ...savedDeepseek, keys: [] };
   // Groq / DeepSeek keys that aren't invalid or waiting out a limit (same state map as Gemini keys)
   const groqAvailable = pickAvailableKeys(groqKeys, state);
   const groqKey = groqAvailable.length > 0;
@@ -1070,7 +1088,10 @@ async function runWithProviders({ mediaUrls, buildPromptFn, parse, deepseekOrigi
   const deepseekKey = deepseekAvailable.length > 0;
 
   if (!keys.length && !groqKeys.length && !openrouterKey && !deepseek.keys.length) {
-    throw new Error('No API keys configured. Open the side panel and add a Gemini, DeepSeek, Groq, or OpenRouter key.');
+    const hasSavedKeys = savedGeminiKeys.length || savedGroqKeys.length || savedOpenrouterKey || savedDeepseek.keys.length;
+    throw new Error(hasSavedKeys
+      ? 'Every AI that has a key is turned off. Turn one on under "AI On / Off" in the side panel.'
+      : 'No API keys configured. Open the side panel and add a Gemini, DeepSeek, Groq, or OpenRouter key.');
   }
 
   // Fetch media once (shared across all attempts), all in parallel
