@@ -103,6 +103,30 @@
     <button id="clearSuffixBtn" class="btn btn-secondary">Clear</button>
   </div>
 
+  <div class="section" id="typingSection">
+    <h2>Typing Speed</h2>
+    <div class="form-group speed-options">
+      <label class="speed-option">
+        <input type="radio" name="typingSpeed" value="fast">
+        <span><strong>Fast</strong>: about 100 words a minute</span>
+      </label>
+      <label class="speed-option">
+        <input type="radio" name="typingSpeed" value="normal">
+        <span><strong>Normal</strong> (recommended): about 60 words a minute</span>
+      </label>
+      <label class="speed-option">
+        <input type="radio" name="typingSpeed" value="slow">
+        <span><strong>Slow</strong>: about 40 words a minute</span>
+      </label>
+      <p class="help-text">
+        The keyboard icon on a reply, and <strong>Type into reply</strong> under your own reply (open it with the
+        pencil icon on a post to skip the AI), type it into the
+        post's reply box one letter at a time instead of pasting it. It opens the reply box if it isn't open.
+        Leave the cursor in the box while it types. It never presses Reply: check the text and send it yourself.
+      </p>
+    </div>
+  </div>
+
   <div class="section">
     <h2>Groq API Keys (optional fallback)</h2>
     <div class="form-group">
@@ -145,7 +169,8 @@
       <li>Open <strong>x.com</strong></li>
       <li>Click <strong>Vibe Reply</strong> on any post</li>
       <li>Get 6 short replies: 2 questions and 4 reactions or takes</li>
-      <li>Click the copy icon next to any reply</li>
+      <li>Click the copy icon next to any reply, or the keyboard icon to have it typed into the reply box</li>
+      <li>Or click the <strong>pencil</strong> on a post to write or paste your own reply and have it typed in, with no AI and no API key</li>
     </ul>
   </div>
 

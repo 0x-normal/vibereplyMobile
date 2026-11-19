@@ -351,6 +351,21 @@ speedRadios.forEach(r => r.addEventListener('change', () => {
   if (r.checked) chrome.storage.local.set({ replySpeed: r.value });
 }));
 
+// ---- Typing speed ("Type into reply" types the reply letter by letter) ----
+const typingRadios = document.querySelectorAll('input[name="typingSpeed"]');
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const { typingSpeed = 'normal' } = await chrome.storage.local.get(['typingSpeed']);
+  typingRadios.forEach(r => { r.checked = r.value === typingSpeed; });
+});
+
+typingRadios.forEach(r => r.addEventListener('change', () => {
+  if (r.checked) chrome.storage.local.set({ typingSpeed: r.value });
+}));
+
+// The phone app can't type into the X app, so this setting means nothing there
+if (window.vibeShim) document.getElementById('typingSection').style.display = 'none';
+
 // ---- My reply style (examples of the user's own replies) ----
 const styleInput = document.getElementById('styleExamples');
 const styleStatus = document.getElementById('styleStatus');

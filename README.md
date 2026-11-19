@@ -31,8 +31,9 @@ Limits: posts from private (protected) accounts can't be read. The repository is
 
 ## How it works
 
-- A **Vibe Reply** button is added next to the action bar of every post on x.com
-- On click, the extension extracts:
+- Two buttons are added to the action bar of every post on x.com: **Vibe Reply** (sparkle, AI replies) and **Write your own reply** (pencil, no AI)
+- The pencil opens the panel on that post without calling any AI, so it works with no API key and uses no quota: the "Your reply" box gets the cursor, you write or paste your reply, and **Type into reply** types it into the post's reply box (see below). The AI is used only if you then press Regenerate or Fix & improve
+- On a Vibe Reply click, the extension extracts:
   - The caption text
   - Any image URLs (`pbs.twimg.com`)
   - For videos, the poster (still frame) thumbnail
@@ -43,6 +44,7 @@ Limits: posts from private (protected) accounts can't be read. The repository is
 - The AI returns JSON with its read of the post, a list of replies that are not questions, and a list of questions
 - The side panel displays them with a copy icon next to each
 - **Fix & improve your own reply:** type your reply in the "Your reply" box under the suggestions and click **Fix & improve** (or Ctrl+Enter). The post (caption + media) and your draft go to the AI, which returns a one-line note on what was wrong, a corrected version that keeps your meaning, and 3 more natural ways to say it, each with a copy button
+- **Type into reply (letter by letter, no pasting):** every reply card has a keyboard icon next to the copy icon, and the "Your reply" box has a **Type into reply** button for a reply you wrote or pasted there. Instead of pasting, it types the reply into the post's reply box one letter at a time at a person's pace, with small random pauses between letters and longer ones between some words and after punctuation. Each letter goes in through the browser's own text insertion (a typed letter with a key press around it, never a paste). Where it types: X's open reply window if there is one, else the reply box you clicked into after picking the post, else it clicks the post's **Reply** button itself and types in the box that opens. If the box already has text, the reply goes after it. The bar at the bottom of the panel shows the progress and a **Stop** button; it also stops if the cursor leaves the reply box, and at the end it checks the box holds the whole reply. Typing a generated reply adds the next suffix, like copying; the "Your reply" box is typed exactly as written. Speed (Fast / Normal / Slow, about 100 / 60 / 40 words a minute) is under **Typing Speed** in settings (hidden in the phone app, which can't type into the X app). It never presses Reply: you check the text and send it
 
 ## Reply rules (enforced in the prompt and post-processed)
 
@@ -60,14 +62,14 @@ Limits: posts from private (protected) accounts can't be read. The repository is
 - Video understanding is done via the **poster frame**, not the full video. For most chill / satisfying / wow clips this is enough. If you want full-video understanding, the next step would be:
   - Capture multiple frames from `<video>` via `<canvas>` (works only when the video is not CORS-tainted), or
   - Download the actual `.mp4` from the tweet's `video_info` and upload via Gemini's Files API.
-- The extension does not auto-send replies — you copy and paste manually.
+- The extension does not auto-send replies: you copy and paste them, or let it type them into the reply box, and you press Reply yourself.
 - Gemini free tier has per-minute / per-day limits; check your quota in AI Studio.
 
 ## File overview
 
 - `manifest.json` – MV3 config, permissions for X, Twitter media domains, Gemini, DeepSeek, Groq and OpenRouter
 - `background.js` – fetches media, calls Gemini, parses the replies and picks 2 questions + 4 others
-- `content.js` – injects the button, side panel, and the copy UI
+- `content.js` – injects the button, side panel, the copy UI and the letter-by-letter typing
 - `styles.css` – button + panel styling
 - `popup.html` / `popup.js` / `popup-styles.css` – API key settings UI (also the phone app's settings screen)
 - `mobile/` – the phone app: `index.html` / `app.js` / `app.css` (screen), `chrome-shim.js` (stands in for the `chrome.*` APIs so `background.js` and `popup.js` run unchanged), `manifest.webmanifest` (install + Share menu), `sw.js` (service worker), icons

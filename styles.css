@@ -1,7 +1,8 @@
 /* vibeReply - Content styles */
 
-/* Trigger button on each tweet */
-.vibe-trigger-btn {
+/* Buttons on each tweet: AI replies (sparkle) and write your own reply (pencil) */
+.vibe-trigger-btn,
+.vibe-write-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -20,7 +21,8 @@
   transition: color 0.15s ease, background-color 0.15s ease;
   font-family: inherit;
 }
-.vibe-trigger-btn > svg {
+.vibe-trigger-btn > svg,
+.vibe-write-btn > svg {
   display: block;
   width: 18.75px;
   height: 18.75px;
@@ -30,7 +32,13 @@
   color: #1d9bf0;
   background-color: rgba(29, 155, 240, 0.1);
 }
-.vibe-trigger-btn:focus-visible {
+.vibe-write-btn:hover,
+.vibe-write-btn:focus-visible {
+  color: #a78bfa;
+  background-color: rgba(139, 92, 246, 0.12);
+}
+.vibe-trigger-btn:focus-visible,
+.vibe-write-btn:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
@@ -268,6 +276,74 @@
   color: #6ee7b7;
   border-color: rgba(16, 185, 129, 0.5);
 }
+.vibe-card-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+}
+
+/* Typing a reply into X's reply box */
+.vibe-is-typing .vibe-type-btn,
+.vibe-is-typing .vibe-type-own-btn {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+.vibe-reply-card.vibe-typing-source {
+  border-color: rgba(6, 182, 212, 0.7);
+}
+.vibe-is-typing .vibe-typing-source .vibe-type-btn,
+.vibe-is-typing .vibe-type-own-btn.vibe-typing-source {
+  opacity: 1;
+  color: #67e8f9;
+  border-color: rgba(6, 182, 212, 0.7);
+}
+.vibe-type-bar {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0 0 14px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.vibe-type-bar.vibe-type-bar-visible {
+  display: flex;
+}
+.vibe-type-text {
+  flex: 1;
+  min-width: 0;
+}
+.vibe-type-info {
+  background: rgba(6, 182, 212, 0.1);
+  color: #67e8f9;
+}
+.vibe-type-ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+}
+.vibe-type-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+.vibe-type-stop {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 7px;
+  background: transparent;
+  color: #fca5a5;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vibe-type-stop:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fff;
+}
 
 /* "Your reply" fix & improve section */
 .vibe-improve {
@@ -301,9 +377,14 @@
 .vibe-my-reply:focus {
   border-color: rgba(139, 92, 246, 0.6);
 }
-.vibe-improve-btn {
-  width: 100%;
+.vibe-improve-actions {
+  display: flex;
+  gap: 8px;
   margin: 8px 0 10px;
+}
+.vibe-improve-btn {
+  flex: 1 1 0;
+  min-width: 0;
   padding: 9px 12px;
   border: none;
   border-radius: 9px;
@@ -321,6 +402,16 @@
 .vibe-improve-btn:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+.vibe-type-own-btn {
+  background: transparent;
+  border: 1px solid rgba(139, 92, 246, 0.55);
+  color: #c4b5fd;
+}
+.vibe-type-own-btn:hover {
+  opacity: 1;
+  background: rgba(139, 92, 246, 0.15);
+  color: #fff;
 }
 .vibe-improve-feedback {
   padding: 9px 12px;
