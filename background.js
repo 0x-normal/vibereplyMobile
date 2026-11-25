@@ -210,6 +210,8 @@ Post: "anyone else's landlord ignoring repair requests for months?"
   bad: "put every request in writing with dates, it matters later" (advice nobody asked for)
   good: "months is crazy, that's so annoying"`;
 
+// NOT USED for replies anymore: every provider now uses buildReplyPrompt (below).
+// Kept with parseReplyList in case you want the old 6-replies / 2-questions style back.
 // opts.mediaHidden: see describePost.
 // opts.keyPoints: also ask for "key_points" (the concrete things in the post) before the
 // replies. Smaller models (Groq) write much more on-topic replies when they list these first.
@@ -409,44 +411,48 @@ function parseReplies(text) {
   return lines.slice(0, REPLY_CANDIDATES);
 }
 
-// ---- DeepSeek's own reply prompt (the owner's account, @0xnormal_) ----
-// 7 simple replies, the way a normal person reacts after reading the post once: no reply
-// types, tips, angles, breakdowns or clever lines. Supportive (takes the post at face
-// value) and plain (readable in one quick read).
-// To keep replies on the post: the model gets the whole post (describePost: reply-to,
-// link preview, image descriptions, video still-frame note); it first writes how it read
-// the post ("read", shown in the panel, so a misread is easy to spot) and the post's
-// concrete details ("key_points"); and every reply must be about one of those details.
-const DEEPSEEK_REPLY_COUNT = 7;
+// ---- The reply prompt (the owner's account, @0xnormal_), used by every provider ----
+// Gemini, DeepSeek, Groq and OpenRouter all write replies with this same prompt.
+// 6 simple replies, the way a normal person reacts after reading the whole post once:
+// replies 1-4 react to the post's overall message (not one item or word of it), and
+// replies 5-6 are also simple, picked to fit the post (a question, "same here", a light
+// joke, congrats, or the one part that stood out). Question posts get 6 answers instead.
+// No tips, angles, breakdowns or clever lines; supportive and plain.
+// The model gets the whole post (describePost) and first writes how it read the post
+// ("read", shown in the panel, so a misread is easy to spot) and its overall message
+// ("main_point"), so the replies stay on the whole post.
+const NORMAL_REPLY_COUNT = 6;
 
-function buildDeepSeekPrompt(tweetText, hasMedia, mediaKind, context = {}, opts = {}) {
+// opts.mediaHidden: the post has media this model can't see (text-only Groq model).
+// opts.style: the user's own past replies ("My Reply Style" setting), to copy their voice.
+function buildReplyPrompt(tweetText, hasMedia, mediaKind, context = {}, opts = {}) {
   return `You are @0xnormal_, scrolling X and replying to a post like a normal person: someone reacting to what they just read, not an expert, a coach, or a marketer. Reply about what THIS post is about.
 
 THE POST
 ${describePost(tweetText, context, hasMedia, mediaKind, opts.mediaHidden)}
 
-STEP 1. Understand the post before writing anything.
+STEP 1. Read the WHOLE post before writing anything.
 - "read": one plain sentence: what the post says or shows, and what the author wants from replies (answers to their question, a laugh, support, a debate, reactions to news or a win, help). If part of it is unclear, say which part instead of guessing.
-- "key_points": 2 to 4 concrete things from the post a reply can react to: the main claim, a name, a number, an event, what is in the image. Copy them from the post; never invent any.
+- "main_point": the post's overall message in one short sentence. Sum up the whole post, not one line, item, or number from it. For a list, it's what the whole list is saying together.
 
-STEP 2. Write 7 replies to THIS exact post, the kind a normal person types after reading it once. No technique and no strategy: don't try to add value, give tips, explain things, find an angle, sound smart, or be clever. Just react to it naturally.
+STEP 2. Write 6 replies to THIS exact post, the kind a normal person types after reading it once. No technique and no strategy: don't try to add value, give tips, explain things, find an angle, sound smart, or be clever. Just react to it naturally.
+
+REPLIES 1 TO 4: about the main point
+Each one reacts to the post's main_point as a whole: agree, relate, say how it lands for you, or react to the news or the win. Each one worded differently.
+If the post is long or a list, react to the overall message. Don't pick out one item, word, or number and reply only about that.
+
+REPLIES 5 AND 6: also normal and simple, picked to fit this post
+Choose whatever fits best: a short real question about the post, a "same here" personal reaction, congrats on a win, a light joke on a light post, or the one part that stood out to you most (the only place where focusing on one detail is fine). Make 5 and 6 two different kinds.
 
 THE ONE RULE THAT MATTERS MOST
-Every reply must be clearly about one of your key_points. Someone reading only the reply should be able to tell which post it's under. If a reply could sit under 100 other posts, or drifts to a topic the post isn't about, rewrite it.
+Someone reading only the reply should be able to tell which post it's under. If a reply could sit under 100 other posts, or drifts to a topic the post isn't about, rewrite it.
 If the post has no text, react only to the media.
 Take the post at face value. Don't doubt the author's numbers, results, or story.
 
-WHAT NORMAL REPLIES ARE
-- A simple reaction: what you think or feel about it ("that looks so clean", "congrats on the first sale")
-- Agreeing or disagreeing in plain words, with a few words of why only if it comes naturally
-- A simple question you'd actually want answered ("where is this?", "how long did it take?"). At most 2 of the 7
-- A light joke, only on a light post
-Mix these; don't make all 7 the same kind.
-
 WHEN THE POST ASKS ITS AUDIENCE SOMETHING
-If the author asks readers a real question ("what's one...", "what's your...", "name a...", "drop your...", "which would you pick", a poll, asking for recommendations), all 7 replies just answer it, the way a normal person would:
+If the author asks readers a real question ("what's one...", "what's your...", "name a...", "drop your...", "which would you pick", a poll, asking for recommendations), all 6 replies just answer it, the way a normal person would:
 - Each one names a concrete answer (the actual skill, book, tool, place, choice...), with a few words of why if you like.
-- 7 different answers. Never give the same answer twice.
+- 6 different answers. Never give the same answer twice.
 - Never ask a question back or give general advice instead of an answer.
 
 STYLE
@@ -470,21 +476,25 @@ DO NOT
 - Repeat or paraphrase the post.
 - Use filler that fits any post: "great post", "this 👆", "so true", "facts", "huge if true", "bullish" alone, "wagmi", "lfg", "this is the way", "who else", "can't stress this enough", "game changer".
 - Start two replies with the same word.
-
+${describeStyle(opts.style)}
 EXAMPLES
-Post: "BTC ETFs saw $1.5B in outflows this week"
-Too much: "outflows matter less than who's selling. basis trade unwinds look the same on the chart" (expert talk)
-Good: "1.5B out in one week is a lot"
-Good: "people getting nervous again"
+Post: "The person you will be in 5 years depends on: the books you read, the foods you eat, the habits you build, the friends you meet, the workouts you do, the money you invest, the sacrifices you make. Act accordingly."
+Too narrow: "garbage food taxes every other line" (picks one item and ignores the post's message)
+Too much: "friends set defaults; defaults beat discipline most days" (clever line)
+Good (1-4): "agree, it's the small daily stuff that ends up mattering most"
+Good (1-4): "good reminder, all of this is just choices we make every day"
+Good (5-6): "the friends one hit me the most"
+Good (5-6): "which one was the hardest for you to stick with?"
 
 Post: "I quit my job to build a SaaS"
 Too much: "build the distribution before the product runs out your savings" (advice nobody asked for)
-Good: "big move, good luck with it"
-Good: "what are you building?"
+Good (1-4): "big move, good luck with it"
+Good (5-6): "what are you building?"
 
-Post: "The person you will be in 5 years depends on the books you read, the friends you meet, the money you invest..."
-Too much: "friends set defaults; defaults beat discipline most days" (clever line)
-Good: "agree, especially the friends part"
+Post: "BTC ETFs saw $1.5B in outflows this week"
+Too much: "outflows matter less than who's selling. basis trade unwinds look the same on the chart" (expert talk)
+Good (1-4): "1.5B out in one week is a lot"
+Good (5-6): "people getting nervous again"
 
 Post: "what's one book everyone should read at least once?"
 Bad: "which one changed your life the most" (asks back instead of answering)
@@ -493,20 +503,20 @@ Good: "the psychology of money, easy read and really useful"
 
 Post: video, a dog won't get out of the pool while its owner keeps calling it
 Bad: "diamond paws, holding through the noise" (drags crypto into a post that isn't about it)
-Good: "he's not coming out lol"
-Good: "he heard you, he just doesn't care"
+Good (1-4): "he's not coming out lol"
+Good (5-6): "he heard you, he just doesn't care"
 
 BEFORE YOU ANSWER
-Check each reply: is it about one of your key_points, and does it sound like a normal person typed it quickly, not like a tip, an insight, or a clever line? If the post asked a question, does every reply answer it with a different answer? Rewrite any that fail.
+Check each reply: do replies 1 to 4 react to the main_point as a whole (not one item from it)? Are 5 and 6 simple and right for this post? Does every reply sound like a normal person typed it quickly, not like a tip, an insight, or a clever line? If the post asked a question, does every reply answer it with a different answer? Rewrite any that fail.
 
 OUTPUT
-Return ONLY valid JSON in exactly this shape, nothing else. "replies" has 7 strings, and no reply may end with ".":
-{"read": "...", "key_points": ["...", "..."], "replies": ["reply one", "reply two", "reply three", "reply four", "reply five", "reply six", "reply seven"]}`;
+Return ONLY valid JSON in exactly this shape, nothing else. "replies" has 6 strings, in the order above, and no reply may end with ".":
+{"read": "...", "main_point": "...", "replies": ["reply one", "reply two", "reply three", "reply four", "reply five", "reply six"]}`;
 }
 
 // Light cleanup that respects this prompt's rules: the author's @mention and one emoji
 // are allowed, so only quotes, hashtags, dashes and a final period are fixed.
-function cleanDeepSeekReply(s) {
+function cleanReply(s) {
   return fixDashes(String(s)
     .replace(/^["'“‘]+|["'”’]+$/g, '')
     .replace(/(^|\s)#\w+/g, '$1'))
@@ -515,9 +525,9 @@ function cleanDeepSeekReply(s) {
     .trim();
 }
 
-// {"read", "key_points", "replies": [7]} (or a bare array of replies), shown in the
-// order the model wrote them. key_points are the model's notes, not replies.
-function parseDeepSeekReplies(text) {
+// {"read", "main_point", "replies": [6]} (or a bare array of replies), shown in the
+// order the model wrote them. main_point is the model's note, not a reply.
+function parseNormalReplies(text) {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
   // A reply may come back as {"type": ..., "text": ...} instead of a plain string
   const asText = r => (r && typeof r === 'object' ? r.text || r.reply || '' : r);
@@ -535,7 +545,7 @@ function parseDeepSeekReplies(text) {
     console.error('vibeReply: parse failed, raw text was:', text);
     throw new Error('Could not parse the replies.');
   }
-  return { read, replies: replies.slice(0, DEEPSEEK_REPLY_COUNT).map(cleanDeepSeekReply).filter(Boolean) };
+  return { read, replies: replies.slice(0, NORMAL_REPLY_COUNT).map(cleanReply).filter(Boolean) };
 }
 
 // ---- Multi-key rotation helpers ----
@@ -711,6 +721,15 @@ const REPLY_SYSTEM = `You write short replies to X (Twitter) posts the way a nor
 // never comes back broken or with extra fields.
 const stringList = { type: 'array', items: { type: 'string' } };
 const GROQ_SCHEMAS = new Map([
+  [parseNormalReplies, {
+    name: 'replies',
+    schema: {
+      type: 'object',
+      properties: { read: { type: 'string' }, main_point: { type: 'string' }, replies: stringList },
+      required: ['read', 'main_point', 'replies'],
+      additionalProperties: false
+    }
+  }],
   [parseReplyList, {
     name: 'replies',
     schema: {
@@ -896,7 +915,7 @@ async function getDeepSeekSettings() {
   };
 }
 
-// original: send DeepSeek's own reply prompt as is (no system message).
+// original: send the reply prompt as is, with DeepSeek's own settings (no system message).
 // It thinks at "high" effort (DeepSeek's default; "low" read posts too shallowly and gave
 // replies that were only loosely about the post). DeepSeek ignores temperature while
 // thinking; 0.7 applies only if thinking is ever rejected and the request is retried without it.
@@ -917,7 +936,7 @@ async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, origin
       temperature: 0.7,
       // JSON mode (the prompt includes the word JSON and the exact shape, as DeepSeek requires)
       response_format: { type: 'json_object' },
-      // Room for the thinking plus the read, key points and 7 replies
+      // Room for the thinking plus the read, main point and 6 replies
       max_tokens: 8192,
       stream: false
     }
@@ -973,7 +992,7 @@ async function callDeepSeekOnce(apiKey, images, prompt, parse, timeoutMs, origin
 
 // Tries each usable DeepSeek key. Out of balance (402) and rate limits (429) are
 // remembered in keyState so the next request skips that key for a while.
-// original: { buildPromptFn, parse } to use DeepSeek's own reply prompt instead
+// original: { buildPromptFn, parse } for replies (the shared reply prompt, sent without a system message)
 async function tryDeepSeek(allKeys, available, mediaParts, buildPromptFn, parse, timeLeft, onProgress, original = null) {
   const images = mediaParts.filter(p => p.inline_data.mime_type.startsWith('image/'));
   const prompt = original
@@ -1039,16 +1058,19 @@ async function getStyleExamples() {
 
 async function generateReplies({ tweetText, mediaUrls, mediaKind, context, onProgress }) {
   const style = await getStyleExamples();
+  // One prompt for every provider: 6 replies, 4 on the post's main point and 2 that fit the post
+  const replyPrompt = {
+    buildPromptFn: (hasMedia, opts = {}) =>
+      buildReplyPrompt(tweetText, hasMedia, mediaKind || 'media', context, { ...opts, style }),
+    parse: parseNormalReplies
+  };
   return runWithProviders({
     mediaUrls,
     onProgress,
-    buildPromptFn: (hasMedia, opts) => buildPrompt(tweetText, hasMedia, mediaKind || 'media', context, style, opts),
-    parse: parseReplyList,
-    // DeepSeek writes replies with its own prompt (7 replies, crypto-Twitter voice)
-    deepseekOriginal: {
-      buildPromptFn: (hasMedia, opts) => buildDeepSeekPrompt(tweetText, hasMedia, mediaKind || 'media', context, opts),
-      parse: parseDeepSeekReplies
-    }
+    buildPromptFn: replyPrompt.buildPromptFn,
+    parse: replyPrompt.parse,
+    // DeepSeek sends the same prompt with its own request settings (no system message)
+    deepseekOriginal: replyPrompt
   });
 }
 
